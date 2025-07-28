@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  ssl-monitor:
+    build:
+      context: src
+      dockerfile: docker/Dockerfile
+    container_name: ssl-monitor-app
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=postgres
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/ssl_monitor
+      - SPRING_DATASOURCE_USERNAME=ssl_monitor
+      - SPRING_DATASOURCE_PASSWORD=ssl_monitor
+      - JAVA_OPTS=-Xmx512m -Xms256m
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - ssl-monitor-network
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: ssl-monitor-postgres
+    environment:
+      - POSTGRES_DB=ssl_monitor
+      - POSTGRES_USER=ssl_monitor
+      - POSTGRES_PASSWORD=ssl_monitor
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - ssl-monitor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ssl_monitor -d ssl_monitor"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  adminer:
+    image: adminer:latest
+    container_name: ssl-monitor-adminer
+    ports:
+      - "8081:8080"
+    depends_on:
+      - postgres
+    networks:
+      - ssl-monitor-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  ssl-monitor-network:
+    driver: bridge
